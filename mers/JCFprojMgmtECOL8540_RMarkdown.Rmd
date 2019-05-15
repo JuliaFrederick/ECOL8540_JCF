@@ -1,0 +1,198 @@
+---
+title: "ECOL8540 - StatLit"
+author: "Julia Frederick"
+date: "May 15, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+## MERS Data Set
+
+This is an R Markdown document for the MERs data set from the **Compulational Workshop (ECOL8540)** at UGA. The data set was originally sourced from https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv". We will need to set our working directory using the command setwd("yourFilePath"), and then assigning a variable to the data set:
+
+```{r mers Data Load}
+setwd("~/RWorkshop/mers")
+mers<-read.csv('cases.csv')
+```
+
+## Libraries Needed
+
+``` {r Library Load}
+#install.packages("lubridate", "ggplot2") ##install the packages if they aren't currently on your computer
+
+#loading packages to your environment for use
+library(lubridate)
+library(ggplot2) 
+library(plotly)
+
+```
+
+
+## Data Clean-Up and Changes
+If you open the mers data file in R you can see that some of the data needs to be cleaned up before analysis can begin: 
+
+``` {r DataCleanUp}
+head(mers) ##Shows the first few lines of the data, and the format of the columns
+class(mers$onset) ##Returns "factor" to see how this particular column of data is formatted
+mers$hospitalized[890] = c('2015-02-20') ##Changing the date on line 890
+mers = mers[-471,] ##[row,column], "-" indicates delection
+mers$onset2 = ymd(mers$onset) ##Changes date format into what we want
+mers$hospitalized2 = ymd(mers$hospitalized)
+class(mers$onset2)
+
+```
+
+There are other measures that would be interesting to us in this data set so now we will calculate them for use in plotting
+
+```{r DataMan}
+#Here we are finding the day of onset
+day0 = min(na.omit(mers$onset2))##This is indicating the earliest day of onset, na.omit removes cases with na
+mers$epi.day = as.numeric(mers$onset2 - day0)
+
+#Here we are calculating the infectious period in day
+mers$infectious.period = mers$hospitalized2-mers$onset2  ##calculate "raw" infectious period
+class(mers$infectious.period)  ##These data are class "difftime
+mers$infectious.period = as.numeric(mers$infectious.period, units = "days") #convert to days
+```
+
+## Plotting Basics
+
+Basic plot of epidemic onset 
+```{r BasicPlot}
+ggplot(data=mers) +
+  geom_bar(mapping=aes(x=epi.day))+
+  labs(x='Epidemic day', y='Case count', title='Global count of MERS cases by date of symptom onset', caption="Data from https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv")
+
+```
+
+Modifying the plot to show the difference between countries
+
+``` {r countrydiff}
+
+##Modify the plot to show the difference between the countries
+ggplot(data=mers) +
+  geom_bar(mapping=aes(x=epi.day, fill=country))+
+  labs(x='Epidemic day', y='Case count', title='Global count of MERS cases by date of symptom onset', caption="Data from https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv")
+
+```
+
+Other options for plotting in ggplot
+
+``` {r coordpolarPlot}
+ggplot(data=mers) +
+  geom_bar(mapping=aes(x=epi.day, fill=country))+
+  labs(x='Epidemic day', y='Case count', title='Global count of MERS cases by date of symptom onset', 
+       caption="Data from https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv") +
+    coord_polar()
+  ##coord_flip() can be added instead of coord_polar() or on top of it 
+```
+
+## Univariate Plots 
+More common plot types can be found at: https://www.rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf
+Creating a histogram of our data:
+
+```{r Hist1}
+##Creates a histogram
+ggplot(data=mers) +
+  geom_histogram(aes(x=infectious.period)) +
+  labs(x='Infectious period', y='Frequency', title='Distribution of calculated MERS infectious period',
+       caption="Data from: https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv")
+    #Has negative infectious periods this is occuring because of the way mers transmits
+```
+
+Our last histogram has negative infectious periods because of the way MERs transmits so let's remove those
+```{r Hist2pos}
+mers$infectious.period2 = ifelse(mers$infectious.period<0,0,mers$infectious.period)
+ggplot(data=mers) +
+  geom_histogram(aes(x=infectious.period2)) +
+  labs(x='Infectious period', y='Frequency', title='Distribution of calculated MERS infectious period (positive values only)',
+       caption="Data from: https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv")
+```
+
+Other examples of plots that we can use for this data set:
+
+```{r }
+##Creates a density plot
+ggplot(data=mers) +
+  geom_density(mapping=aes(x=infectious.period2)) +
+  labs(x='Infectious period', y='Frequency',
+       title='Probability density for MERS infectious period (positive values only)', 
+       caption="Data from: https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv")
+
+##Creates an area plot, shading the curve of the density plot
+ggplot(data=mers) +
+  geom_area(stat='bin', mapping=aes(x=infectious.period2)) +
+  labs(x='Infectious period', y='Frequency',
+       title='Area plot for MERS infectious period (positive values only)', 
+       caption="Data from: https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv")
+
+##Creates a dotplot 
+ggplot(data=mers) +
+  geom_dotplot(stat='bin', mapping=aes(x=infectious.period2)) +
+  labs(x='Infectious period', y='Frequency',
+       title='Dot plot for MERS infectious period (positive values only)', 
+       caption="Data from: https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv")
+```
+
+## Bivariate Plots
+
+Looking at the relationships between 2 variables in this data set
+```{r BivariatePlots}
+
+#Adding in geom_smooth shows possible societal learning with small recoveries and infectious as it changes
+ggplot(data=mers, mapping=aes(x=epi.day, y=infectious.period2)) +
+  geom_point() + geom_smooth()
+
+ggplot(data=mers, mapping=aes(x=epi.day, y=infectious.period2)) +
+  geom_point(mapping=aes(color=country)) + 
+  geom_smooth(aes(color=country), method = "loess")
+ #Method found here: https://stackoverflow.com/questions/40600824/how-to-apply-geom-smooth-for-every-group
+```
+
+## Faceting
+Make multi-panel plots using facet_wrap() and facet_grid()
+
+``` {r Faceting}
+##Breaks data into individual graphs by country looking at the same variables using facet_wrap
+ggplot(data=mers, mapping=aes(x=epi.day, y=infectious.period2)) +
+  geom_point(mapping = aes(color=country)) +
+  facet_wrap(~ country) +
+  scale_y_continuous(limits = c(0, 50)) +
+  labs(x='Epidemic day', y='Infectious period',
+       title='MERS infectious period (positive values only) over time', 
+       caption="Data from: https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv") 
+
+#Breaks the previous wrapped data set that was broken by country into being broken by gender and country
+ggplot(data=subset(mers, gender %in% c('M', 'F') & country %in% c('KSA', 'Oman', 'Iran', 'Jordan', 'Qatar', 'France', 'Italy', 'Kuwait', 'Lebanon', 'South Korea', 'Tunisia', 'UAE', 'UK', 'Yemen')), 
+       mapping=aes(x=epi.day, y=infectious.period2)) +
+  geom_point(mapping = aes(color=country)) +
+  facet_grid(gender ~ country) +
+  scale_y_continuous(limits = c(0, 50)) +
+  labs(x='Epidemic day', y='Infectious period',
+       title='MERS infectious period by gender and country', caption="Data from: https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv") 
+
+#Breaks into case fatlity over time and across country
+ggplot(data=subset(mers, outcome %in% c('fatal', 'recovered') & country %in% c('KSA', 'Oman', 'Iran', 'Jordan', 'Qatar', 'France', 'Italy', 'Kuwait', 'Lebanon', 'South Korea', 'Tunisia', 'UAE', 'UK', 'Yemen')), 
+       mapping=aes(x=epi.day, y=infectious.period2)) +
+  geom_point(mapping = aes(color=country)) +
+  facet_grid(outcome ~ country) +
+  scale_y_continuous(limits = c(0, 50)) +
+  labs(x='Epidemic day', y='Infectious period',
+       title='MERS infectious period by case outcomes and country', caption="Data from: https://github.com/rambaut/MERS-Cases/blob/gh-pages/data/cases.csv") 
+
+```
+
+## Interactive Plot
+
+Using the plotly package we will create an interactive plot
+``` {r InteractivePlot}
+CountryEpi <- ggplot(data=mers, mapping=aes(x=epi.day, y=infectious.period2)) +
+  geom_point(mapping=aes(color=country)) + 
+  labs(x='Epidemic Day', y='Infectious Period',
+       title='Infectious Period By Epidemic Day and Country') +
+  geom_smooth(aes(color=country), method = "loess")
+ggplotly(CountryEpi)
+```
